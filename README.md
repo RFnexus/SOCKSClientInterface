@@ -24,6 +24,9 @@ Then add an interface entry in your config like:
   `connect_timeout = 120`
     Seconds to wait for the proxy to establish the connection to the target.
 
+  `reconnect_wait = 5`
+    Seconds to wait before each attempt to reconnect, no less than `TCPClientInterface.RECONNECT_WAIT` (5).
+
   ```
   proxy_username = name
   proxy_password = secret

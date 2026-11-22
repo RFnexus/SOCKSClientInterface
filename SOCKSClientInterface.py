@@ -44,6 +44,10 @@
 #   connect_timeout = 120
 #     Seconds to wait for the proxy to establish the connection to the target.
 #
+#   reconnect_wait = 5
+#     Seconds to wait before each attempt to reconnect, no less than
+#     TCPClientInterface.RECONNECT_WAIT (5).
+#
 #   proxy_username = name
 #   proxy_password = secret
 #     torrc authentication
@@ -128,6 +132,7 @@ class SOCKSClientInterface(TCPClientInterface):
         proxy_username  = c["proxy_username"] if "proxy_username" in c else None
         proxy_password  = c["proxy_password"] if "proxy_password" in c else None
         connect_timeout = c.as_int("connect_timeout") if "connect_timeout" in c else SOCKSClientInterface.CONNECT_TIMEOUT
+        reconnect_wait  = c.as_int("reconnect_wait") if "reconnect_wait" in c else SOCKSClientInterface.RECONNECT_WAIT
 
         if not target_host or target_port == None: raise ValueError(f"No target_host or target_port configured for interface \"{name}\"")
         if not isinstance(target_host, str):       raise ValueError(f"Invalid target_host configured for interface \"{name}\"")
@@ -135,6 +140,7 @@ class SOCKSClientInterface(TCPClientInterface):
         if not proxy_host or not isinstance(proxy_host, str): raise ValueError(f"Invalid proxy_host configured for interface \"{name}\"")
         if not 0 < proxy_port < 65536:             raise ValueError(f"Invalid proxy_port configured for interface \"{name}\"")
         if connect_timeout <= 0:                   raise ValueError(f"Invalid connect_timeout configured for interface \"{name}\"")
+        if reconnect_wait < TCPClientInterface.RECONNECT_WAIT: raise ValueError(f"Invalid reconnect_wait configured for interface \"{name}\"")
         if (proxy_username == None) != (proxy_password == None):
             raise ValueError(f"Both proxy_username and proxy_password must be configured for interface \"{name}\"")
 
@@ -155,6 +161,7 @@ class SOCKSClientInterface(TCPClientInterface):
         self.socks_address   = socks_address
         self.socks_auth      = socks_auth
         self.connect_timeout = connect_timeout
+        self.reconnect_wait  = reconnect_wait
         self.initiator       = True
 
     def final_init(self):
@@ -171,6 +178,9 @@ class SOCKSClientInterface(TCPClientInterface):
             if getattr(self, "wants_tunnel", False) and self.online: RNS.Transport.synthesize_tunnel(self)
 
     def connect(self, initial=False):
+        # TCPClientInterface.reconnect() already waited RECONNECT_WAIT seconds
+        if not initial: time.sleep(self.reconnect_wait-TCPClientInterface.RECONNECT_WAIT)
+
         try:
             if initial:
                 RNS.log("Establishing SOCKS connection for "+str(self)+" via "+self.proxy_str()+"...", RNS.LOG_DEBUG)
@@ -213,7 +223,7 @@ class SOCKSClientInterface(TCPClientInterface):
             if initial:
                 if not self.detached:
                     RNS.log("Initial connection for "+str(self)+" could not be established: "+str(e), RNS.LOG_ERROR)
-                    RNS.log("Leaving unconnected and retrying connection in "+str(TCPClientInterface.RECONNECT_WAIT)+" seconds.", RNS.LOG_ERROR)
+                    RNS.log("Leaving unconnected and retrying connection in "+str(self.reconnect_wait)+" seconds.", RNS.LOG_ERROR)
 
                 return False
 
